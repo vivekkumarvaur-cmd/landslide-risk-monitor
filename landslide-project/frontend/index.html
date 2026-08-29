@@ -220,7 +220,7 @@
   }
 
   async function loadZones(){
-    if (!API_URL || API_URL.includes("PASTE_YOUR")) {
+    if (!API_URL || API_URL.includes("https://landslide-risk-monitor.onrender.com")) {
       renderZones(FALLBACK_ZONES);
       return;
     }
@@ -243,7 +243,7 @@
     const resultBox = document.getElementById('predictResult');
 
     let result;
-    if (!API_URL || API_URL.includes("PASTE_YOUR")) {
+    if (!API_URL || API_URL.includes("https://landslide-risk-monitor.onrender.com")) {
       // Local fallback calculation, same formula as backend
       const r = Math.min(rainfall_mm/150,1)*40, s = Math.min(slope_deg/45,1)*30, m = Math.min(soil_moisture_pct/100,1)*30;
       const total = Math.round((r+s+m)*10)/10;
