@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Byte Nexus — Landslide Risk Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1C1B18;
+    --panel: #26241F;
+    --panel-2: #2F2C26;
+    --line: #3C382F;
+    --text: #EDE9E0;
+    --text-dim: #A8A296;
+    --low: #6FA88A;
+    --mod: #D9A441;
+    --high: #C4532E;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+  }
+  header{
+    padding:20px 28px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  header h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:-0.01em;
+  }
+  header span{
+    color:var(--text-dim);
+    font-size:13px;
+  }
+  .layout{
+    display:grid;
+    grid-template-columns:1fr 360px;
+    gap:0;
+    min-height:calc(100vh - 73px);
+  }
+  #map{ width:100%; height:100%; min-height:480px; filter: saturate(0.85); }
+  aside{
+    background:var(--panel);
+    border-left:1px solid var(--line);
+    padding:24px;
+    overflow-y:auto;
+  }
+  aside h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:15px;
+    font-weight:500;
+    margin-bottom:14px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+  .zone-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:28px; }
+  .zone-card{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:pointer;
+  }
+  .zone-card:hover{ border-color:var(--text-dim); }
+  .zone-name{ font-size:13.5px; font-weight:500; }
+  .zone-score{ font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .badge{
+    font-size:11px;
+    font-weight:600;
+    padding:4px 10px;
+    border-radius:999px;
+    white-space:nowrap;
+  }
+  .badge.Low{ background:rgba(111,168,138,0.15); color:var(--low); }
+  .badge.Moderate{ background:rgba(217,164,65,0.15); color:var(--mod); }
+  .badge.High{ background:rgba(196,83,46,0.18); color:var(--high); }
+
+  form{ display:flex; flex-direction:column; gap:12px; }
+  label{ font-size:12.5px; color:var(--text-dim); display:block; margin-bottom:5px; }
+  input{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:9px 11px;
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    font-size:13.5px;
+  }
+  input:focus{ outline:none; border-color:var(--text-dim); }
+  button{
+    margin-top:6px;
+    background:var(--high);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:11px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    cursor:pointer;
+  }
+  button:hover{ opacity:0.9; }
+  #predictResult{
+    margin-top:14px;
+    padding:12px 14px;
+    border-radius:8px;
+    font-size:13.5px;
+    display:none;
+  }
+  .note{
+    font-size:11.5px;
+    color:var(--text-dim);
+    margin-top:18px;
+    line-height:1.5;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Landslide risk monitor — North Eastern Region</h1>
+  <span>Byte Nexus · SIH 2026 prototype</span>
+</header>
+
+<div class="layout">
+  <div id="map"></div>
+  <aside>
+    <h2>Monitored zones</h2>
+    <div class="zone-list" id="zoneList">
+      <div class="zone-card"><span class="zone-name">Loading zones…</span></div>
+    </div>
+
+    <h2>Check a location</h2>
+    <form id="predictForm">
+      <div>
+        <label for="rainfall">Rainfall, last 24h (mm)</label>
+        <input type="number" id="rainfall" value="80" min="0" required>
+      </div>
+      <div>
+        <label for="slope">Slope angle (degrees)</label>
+        <input type="number" id="slope" value="30" min="0" max="90" required>
+      </div>
+      <div>
+        <label for="moisture">Soil moisture (%)</label>
+        <input type="number" id="moisture" value="50" min="0" max="100" required>
+      </div>
+      <button type="submit">Calculate risk</button>
+    </form>
+    <div id="predictResult"></div>
+
+    <p class="note">
+      Risk score is a simple rule-based model for demo purposes.
+      Swap in a trained ML model on the backend for production use.
+    </p>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ⚠️ After you deploy the backend (Render/Railway), paste its URL here.
+  // Example: "https://landslide-risk-api.onrender.com"
+  const API_URL = "PASTE_YOUR_BACKEND_URL_HERE";
+
+  const FALLBACK_ZONES = [
+    {id:1, name:"Sohra (Cherrapunji), Meghalaya", lat:25.2841, lon:91.7273, risk_score:78.4, risk_level:"High"},
+    {id:2, name:"Kohima, Nagaland", lat:25.6751, lon:94.1086, risk_score:34.4, risk_level:"Low"},
+    {id:3, name:"Aizawl, Mizoram", lat:23.7271, lon:92.7176, risk_score:60.7, risk_level:"Moderate"},
+    {id:4, name:"Gangtok, Sikkim", lat:27.3389, lon:88.6065, risk_score:21.7, risk_level:"Low"},
+    {id:5, name:"Itanagar, Arunachal Pradesh", lat:27.0844, lon:93.6053, risk_score:14.1, risk_level:"Low"}
+  ];
+
+  const colorFor = level => level === "High" ? "#C4532E" : level === "Moderate" ? "#D9A441" : "#6FA88A";
+
+  const map = L.map('map', { zoomControl: true }).setView([25.5, 92.5], 6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  }).addTo(map);
+
+  function renderZones(zones){
+    const list = document.getElementById('zoneList');
+    list.innerHTML = '';
+    zones.forEach(z => {
+      L.circleMarker([z.lat, z.lon], {
+        radius: 9,
+        color: colorFor(z.risk_level),
+        fillColor: colorFor(z.risk_level),
+        fillOpacity: 0.6,
+        weight: 1.5
+      }).addTo(map).bindPopup(`<b>${z.name}</b><br>Risk: ${z.risk_level} (${z.risk_score})`);
+
+      const card = document.createElement('div');
+      card.className = 'zone-card';
+      card.innerHTML = `
+        <div>
+          <div class="zone-name">${z.name}</div>
+          <div class="zone-score">Score: ${z.risk_score}</div>
+        </div>
+        <span class="badge ${z.risk_level}">${z.risk_level}</span>`;
+      card.onclick = () => map.setView([z.lat, z.lon], 9);
+      list.appendChild(card);
+    });
+  }
+
+  async function loadZones(){
+    if (!API_URL || API_URL.includes("PASTE_YOUR")) {
+      renderZones(FALLBACK_ZONES);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/zones`);
+      const data = await res.json();
+      renderZones(data.zones);
+    } catch (err) {
+      console.error("Could not reach backend, showing sample data:", err);
+      renderZones(FALLBACK_ZONES);
+    }
+  }
+  loadZones();
+
+  document.getElementById('predictForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rainfall_mm = parseFloat(document.getElementById('rainfall').value);
+    const slope_deg = parseFloat(document.getElementById('slope').value);
+    const soil_moisture_pct = parseFloat(document.getElementById('moisture').value);
+    const resultBox = document.getElementById('predictResult');
+
+    let result;
+    if (!API_URL || API_URL.includes("PASTE_YOUR")) {
+      // Local fallback calculation, same formula as backend
+      const r = Math.min(rainfall_mm/150,1)*40, s = Math.min(slope_deg/45,1)*30, m = Math.min(soil_moisture_pct/100,1)*30;
+      const total = Math.round((r+s+m)*10)/10;
+      const level = total < 35 ? "Low" : total < 65 ? "Moderate" : "High";
+      result = {risk_score: total, risk_level: level};
+    } else {
+      try {
+        const res = await fetch(`${API_URL}/api/predict`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({rainfall_mm, slope_deg, soil_moisture_pct})
+        });
+        result = await res.json();
+      } catch (err) {
+        resultBox.style.display = 'block';
+        resultBox.style.background = 'rgba(196,83,46,0.15)';
+        resultBox.textContent = 'Could not reach backend API. Check API_URL in the code.';
+        return;
+      }
+    }
+
+    resultBox.style.display = 'block';
+    resultBox.style.background = `${colorFor(result.risk_level)}22`;
+    resultBox.style.color = colorFor(result.risk_level);
+    resultBox.innerHTML = `<b>${result.risk_level} risk</b> — score ${result.risk_score}/100`;
+  });
+</script>
+
+</body>
+</html>
